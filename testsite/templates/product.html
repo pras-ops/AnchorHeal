@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Page</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    {% if decoy %}
+        <{{decoy.tag}} class="{{decoy.class}}" style="{{decoy.style}}">{{decoy.text}}</{{decoy.tag}}>
+    {% endif %}
+
+    <div class="product-page-container">
+        <header class="mini-header">
+            <a href="/" class="back-link">← Back to Dashboard</a>
+            <div class="status-indicator">
+                {% if drift is not none %}
+                    Continuous Drift: <strong class="badge badge-warning">{{ drift }}%</strong>
+                {% else %}
+                    Scenario: <span class="badge badge-primary">v{{ v }}</span>
+                {% endif %}
+            </div>
+        </header>
+
+        {% if banner %}
+            <div style="{{ banner.style }}">{{ banner.text }}</div>
+        {% endif %}
+
+        <div class="product-card">
+            <div class="product-image-box">
+                <span class="placeholder-img-text">Product Image</span>
+            </div>
+            
+            <div class="product-info">
+                <{{title_tag}} class="{{title_class}}" {% if title_id %}id="{{title_id}}"{% endif %}>
+                    {{ title_text }}
+                </{{title_tag}}>
+
+                <div class="price-section">
+                    <{{price_tag}} class="{{price_class}}" {% if price_id %}id="{{price_id}}"{% endif %} style="{{price_style}}">
+                        {{ price_text }}
+                    </{{price_tag}}>
+                    
+                    <{{stock_tag}} class="{{stock_class}}" {% if stock_id %}id="{{stock_id}}"{% endif %}>
+                        {{ stock_text }}
+                    </{{stock_tag}}>
+                </div>
+
+                <div class="description-section">
+                    <{{desc_tag}} class="{{desc_class}}" {% if desc_id %}id="{{desc_id}}"{% endif %}>
+                        {{ desc_text }}
+                    </{{desc_tag}}>
+                </div>
+
+                <div class="action-section">
+                    <{{cart_tag}} class="{{cart_class}}" {% if cart_id %}id="{{cart_id}}"{% endif %}>
+                        {{ cart_text }}
+                    </{{cart_tag}}>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

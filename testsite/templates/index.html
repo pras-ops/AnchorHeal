@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AnchorHeal Test Playground</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">⚓ AnchorHeal</div>
+            <h1>Scraper Healing Playground</h1>
+            <p class="subtitle">A live playground to test scraper resilience, selector drift, and observability.</p>
+        </header>
+        
+        <main class="grid">
+            <div class="card">
+                <h2>Discrete Scenarios</h2>
+                <ul class="scenarios-list">
+                    <li>
+                        <a href="/product?v=1" class="btn btn-secondary">v1: Baseline</a>
+                        <span class="desc">Standard page layout with initial selectors. Used to capture golden anchor baseline.</span>
+                    </li>
+                    <li>
+                        <a href="/product?v=2" class="btn btn-secondary">v2: Class Rename</a>
+                        <span class="desc">Class changes from <code>.price-tag</code> to <code>.product-amount</code>. Tests visual healing fallback.</span>
+                    </li>
+                    <li>
+                        <a href="/product?v=3" class="btn btn-secondary">v3: Layout Shift</a>
+                        <span class="desc">Injects banner pushing page elements down ~120px. Tests position delta tolerance.</span>
+                    </li>
+                    <li>
+                        <a href="/product?v=4" class="btn btn-secondary">v4: Drastic Re-Tree</a>
+                        <span class="desc">Tags, classes, and layout structures all change. Tests heavy blending survival.</span>
+                    </li>
+                    <li>
+                        <a href="/product?v=5" class="btn btn-secondary">v5: Ad Hijack / Decoy</a>
+                        <span class="desc">A decoy element steals the class <code>.price-tag</code>. Tests visual/text context disambiguation.</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>Continuous Drift</h2>
+                <p class="card-desc">Simulate progressive layout erosion. Watch how confidence scores erode before the selector breaks.</p>
+                <div class="drift-links">
+                    <a href="/product?drift=0" class="badge">0% (Clean)</a>
+                    <a href="/product?drift=25" class="badge">25% (Mild)</a>
+                    <a href="/product?drift=50" class="badge">50% (Drifted class)</a>
+                    <a href="/product?drift=75" class="badge badge-warning">75% (Severe drift)</a>
+                    <a href="/product?drift=90" class="badge badge-danger">90% (Broken selector)</a>
+                </div>
+            </div>
+            
+            <div class="card full-width">
+                <h2>Observability</h2>
+                <p class="card-desc">View selector health trends, slope analysis, and predicted breaks in real time.</p>
+                <a href="/dashboard" class="btn btn-primary">Go to Dashboard</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

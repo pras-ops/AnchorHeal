@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AnchorHeal Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo"><a href="/" style="text-decoration: none; color: inherit;">⚓ AnchorHeal</a></div>
+            <h1>Observability Dashboard</h1>
+            <p class="subtitle">Selector drift trends, failure predictions, and database log summaries.</p>
+        </header>
+        
+        <main class="card full-width">
+            <h2>Active Scraping Anchors</h2>
+            {% if not anchors %}
+                <div class="empty-state">
+                    <p>No active anchors found in the database. Run the scraper or demos to populate the store.</p>
+                </div>
+            {% else %}
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Caller ID</th>
+                            <th>Selector</th>
+                            <th>Confidence</th>
+                            <th>Drift Rate (slope/day)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for anchor in anchors %}
+                            <tr>
+                                <td><code>{{ anchor.caller_id }}</code></td>
+                                <td><code>{{ anchor.primary_selector }}</code></td>
+                                <td>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar {% if anchor.confidence < 0.4 %}bg-danger{% elif anchor.confidence < 0.85 %}bg-warning{% else %}bg-success{% endif %}" style="width: {{ anchor.confidence * 100 }}%"></div>
+                                        <span class="progress-text">{{ "%.2f" | format(anchor.confidence) }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="slope {% if anchor.slope < -0.05 %}slope-negative{% elif anchor.slope > 0.05 %}slope-positive{% endif %}">
+                                        {{ "%+.4f" | format(anchor.slope) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if anchor.status == 'critical' %}
+                                        <span class="badge badge-danger">⚠ CRITICAL RISK</span>
+                                    {% elif anchor.status == 'decaying' %}
+                                        <span class="badge badge-warning">⚡ DECAYING</span>
+                                    {% elif anchor.status == 'improving' %}
+                                        <span class="badge badge-success">📈 IMPROVING</span>
+                                    {% else %}
+                                        <span class="badge badge-stable">STABLE</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

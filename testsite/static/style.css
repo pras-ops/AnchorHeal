@@ -1,0 +1,377 @@
+:root {
+    --bg-color: #0b0f19;
+    --card-bg: rgba(22, 30, 49, 0.7);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+header {
+    margin-bottom: 40px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    letter-spacing: -0.025em;
+}
+
+h1 {
+    font-size: 36px;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    letter-spacing: -0.03em;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 16px;
+    margin: 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.card.full-width {
+    grid-column: 1 / -1;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+.card-desc {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+
+.scenarios-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.scenarios-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.scenarios-list li:last-child {
+    border-bottom: none;
+}
+
+.btn {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    transform: scale(1.02);
+}
+
+.btn-secondary {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    border: 1px solid var(--card-border);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.drift-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--card-border);
+    transition: background-color 0.2s ease;
+}
+
+.badge:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.badge-primary {
+    background-color: var(--primary-color);
+}
+
+.badge-warning {
+    background-color: var(--warning-color);
+}
+
+.badge-danger {
+    background-color: var(--danger-color);
+}
+
+.badge-success {
+    background-color: var(--success-color);
+}
+
+.badge-stable {
+    background-color: #6b7280;
+}
+
+/* Product Page Styles */
+.product-page-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.mini-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.back-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.back-link:hover {
+    color: var(--text-primary);
+}
+
+.product-card {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 32px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+}
+
+.product-image-box {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px dashed var(--card-border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 240px;
+}
+
+.placeholder-img-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.product-info {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.product-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.price-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.price-tag, .product-amount, .cost, .real-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--success-color);
+}
+
+.stock-badge, .availability {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: var(--success-color);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.description-section p, .description-section section {
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.action-section button, .action-section a {
+    display: inline-block;
+    padding: 12px 28px;
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.action-section button:hover, .action-section a:hover {
+    background-color: var(--primary-hover);
+}
+
+/* Dashboard Table Styles */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.report-table th, .report-table td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.report-table th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.report-table td {
+    font-size: 14px;
+}
+
+.progress-bar-container {
+    position: relative;
+    width: 120px;
+    height: 16px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+}
+
+.progress-bar {
+    height: 100%;
+}
+
+.progress-bar.bg-success {
+    background-color: var(--success-color);
+}
+
+.progress-bar.bg-warning {
+    background-color: var(--warning-color);
+}
+
+.progress-bar.bg-danger {
+    background-color: var(--danger-color);
+}
+
+.progress-text {
+    position: absolute;
+    right: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.slope {
+    font-family: monospace;
+    font-weight: 600;
+}
+
+.slope-negative {
+    color: var(--danger-color);
+}
+
+.slope-positive {
+    color: var(--success-color);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--text-secondary);
+}
