@@ -5,13 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "anchorheal"
 version = "0.1.0"
-description = "A drop-in self-healing layer for Python scrapers"
+description = "A drop-in, decorator-first self-healing layer for Python scrapers"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "pras-ops", email = "jacobprashant20@gmail.com" }]
+keywords = [
+    "web-scraping",
+    "self-healing",
+    "selenium",
+    "playwright",
+    "beautifulsoup",
+    "selector",
+    "drift",
+    "observability",
+]
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 dependencies = [
     "rapidfuzz>=3.0.0",
@@ -19,6 +39,12 @@ dependencies = [
     "lxml>=4.9.0",
     "pydantic>=2.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pras-ops/AnchorHeal"
+Repository = "https://github.com/pras-ops/AnchorHeal"
+Issues = "https://github.com/pras-ops/AnchorHeal/issues"
+Changelog = "https://github.com/pras-ops/AnchorHeal/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -38,3 +64,5 @@ browsers = [
 include = ["anchorheal*"]
 exclude = ["scratch*", "tests*", "benchmark*"]
 
+[tool.setuptools.package-data]
+anchorheal = ["py.typed"]

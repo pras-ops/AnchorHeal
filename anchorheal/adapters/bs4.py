@@ -142,5 +142,3 @@ class BS4Adapter:
             "sibling_text": sibling_text
         }
 
-    def get_crop(self, ctx: Any, bbox: Dict[str, float]) -> Optional[bytes]:
-        return None

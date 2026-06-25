@@ -1,17 +1,19 @@
 import inspect
 import os
-import datetime
-import math
-from typing import Any, Callable, Dict, Optional, List
-from .store import AnchorStore
-from .models import Anchor, HealEvent
-from .ranker import score_candidate, calculate_success_confidence, calculate_failure_confidence
-from .adapters.selenium import SeleniumAdapter, SeleniumElement
-from .adapters.playwright import PlaywrightAdapter, PlaywrightElement
-from .adapters.bs4 import BS4Adapter, BS4Element
+from typing import Any, Callable, Optional
 
-# Threshold score above which we accept healing
-HEAL_THRESHOLD = 0.60
+from .store import AnchorStore
+from .adapters.selenium import SeleniumAdapter
+from .adapters.playwright import PlaywrightAdapter, PlaywrightElement
+from .adapters.bs4 import BS4Adapter
+from ._healing import (
+    HEAL_THRESHOLD,
+    attempt_heal,
+    update_confidence_on_success,
+)
+
+__all__ = ["heal", "HealContext", "HealingProxy", "HEAL_THRESHOLD"]
+
 
 def get_caller_id(selector: str) -> str:
     frame = inspect.currentframe()
@@ -28,6 +30,17 @@ def get_caller_id(selector: str) -> str:
         del frame
     return selector
 
+
+def _adapter_for(driver_type: str) -> Any:
+    if driver_type == "selenium":
+        return SeleniumAdapter()
+    if driver_type == "playwright":
+        return PlaywrightAdapter()
+    if driver_type == "bs4":
+        return BS4Adapter()
+    raise ValueError(f"Unknown driver_type: {driver_type}")
+
+
 class HealingProxy:
     def __init__(self, obj: Any, driver_type: str, adapter: Any, store: AnchorStore, caller_id: Optional[str] = None):
         self.__dict__["_obj"] = obj
@@ -42,7 +55,7 @@ class HealingProxy:
         adapter = self.__dict__["_adapter"]
         store = self.__dict__["_store"]
         caller_id = self.__dict__["_caller_id"]
-        
+
         attr = getattr(obj, name)
 
         if callable(attr):
@@ -52,130 +65,20 @@ class HealingProxy:
                     # args is usually (By, selector)
                     selector = args[1] if len(args) > 1 else kwargs.get("value", args[0])
                     cid = get_caller_id(selector)
-                    
                     try:
                         res = attr(*args, **kwargs)
-                        # Successfully found!
-                        anchor = store.get_anchor(cid)
+                        # Successfully found: update the continuous-confidence curve (may raise on a decoy).
                         features = adapter.extract_features(res)
-                        
-                        if anchor is None:
-                            # First time: save baseline anchor
-                            anchor = Anchor(
-                                caller_id=cid,
-                                primary_selector=selector,
-                                confidence=1.0,
-                                **features
-                            )
-                            store.save_anchor(anchor)
-                            store.log_confidence(cid, 1.0)
-                        else:
-                            # Subsequent success: score against baseline and log continuous confidence
-                            score, _, _ = score_candidate(features, anchor)
-                            new_conf = calculate_success_confidence(anchor.confidence, score)
-                            store.log_confidence(cid, new_conf)
-                            if score < HEAL_THRESHOLD:
-                                # Soft decoy check: only heal if there is a significantly better candidate on the page
-                                tag = anchor.tag or "*"
-                                candidates = adapter.query_candidates(obj, tag)
-                                if not candidates:
-                                    candidates = adapter.query_candidates(obj, "*")
-                                features_list = adapter.extract_features_bulk(obj, candidates)
-                                best_cand_score = -1.0
-                                for f in features_list:
-                                    if not f:
-                                        continue
-                                    dist = 0.0
-                                    if anchor.rel_position and f.get("rel_position"):
-                                        dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                                        dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                                        dist = math.sqrt(dx*dx + dy*dy)
-                                        if dist > 0.40:
-                                            continue
-                                    cand_score, _, _ = score_candidate(f, anchor)
-                                    if cand_score > best_cand_score:
-                                        best_cand_score = cand_score
-                                if best_cand_score > score + 0.15 and best_cand_score >= HEAL_THRESHOLD:
-                                    raise Exception(f"Decoy element detected (score {score:.2f} < threshold {HEAL_THRESHOLD} and better candidate score {best_cand_score:.2f} exists)")
-                        
-                        # Return wrapped element proxy
+                        update_confidence_on_success(store, adapter, obj, cid, selector, features)
                         return HealingProxy(res._el if hasattr(res, "_el") else res, "selenium_element", adapter, store, cid)
                     except Exception as exc:
-                        # Find element failed. Trigger healing!
+                        # Find failed (or a decoy was detected): trigger healing.
                         anchor = store.get_anchor(cid)
                         if anchor:
-                            driver = obj
-                            # Prune candidates: query by anchor.tag first
-                            tag = anchor.tag or "*"
-                            candidates = adapter.query_candidates(driver, tag)
-                            if not candidates:
-                                candidates = adapter.query_candidates(driver, "*")
-                                
-                            # Batch extract features
-                            features_list = adapter.extract_features_bulk(driver, candidates)
-                            
-                            best_cand = None
-                            best_score = -1.0
-                            best_signal = "dom"
-                            best_features = {}
-                            
-                            pruned_candidates = []
-                            for i, f in enumerate(features_list):
-                                if not f:
-                                    continue
-                                dist = 0.0
-                                if anchor.rel_position and f.get("rel_position"):
-                                    dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                                    dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                                    dist = math.sqrt(dx*dx + dy*dy)
-                                    if dist > 0.40:
-                                        continue
-                                pruned_candidates.append((candidates[i], f, dist))
-                            
-                            # Sort by distance and cap at nearest 300
-                            pruned_candidates.sort(key=lambda x: x[2])
-                            pruned_candidates = [(cand, f) for cand, f, d in pruned_candidates[:300]]
-                                    
-                            for cand_el, f in pruned_candidates:
-                                score, signal, _ = score_candidate(f, anchor)
-                                if score > best_score:
-                                    best_score = score
-                                    best_cand = cand_el
-                                    best_signal = signal
-                                    best_features = f
-                                    
-                            if best_score >= HEAL_THRESHOLD and best_cand:
-                                # Heal successful! Refresh baseline golden snapshot
-                                before_conf = anchor.confidence
-                                after_conf = calculate_success_confidence(before_conf, best_score)
-                                
-                                healed_anchor = Anchor(
-                                    caller_id=cid,
-                                    primary_selector=selector,
-                                    confidence=after_conf,
-                                    **best_features
-                                )
-                                store.save_anchor(healed_anchor)
-                                
-                                # Log healing event
-                                event = HealEvent(
-                                    caller_id=cid,
-                                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
-                                    old_selector=selector,
-                                    new_selector=best_features.get("xpath") or selector,
-                                    healed_features=best_features,
-                                    confidence_before=before_conf,
-                                    confidence_after=after_conf,
-                                    primary_winning_signal=best_signal
-                                )
-                                store.log_heal_event(event)
-                                store.log_confidence(cid, after_conf)
-                                
-                                # Return the winning candidate directly
+                            healed = attempt_heal(store, adapter, obj, cid, selector, anchor)
+                            if healed:
+                                best_cand, _ = healed
                                 return HealingProxy(best_cand, "selenium_element", adapter, store, cid)
-                            else:
-                                # Decrease confidence score on failure
-                                store.log_confidence(cid, calculate_failure_confidence(anchor.confidence))
                         raise exc
 
                 # 2. Playwright interception
@@ -186,132 +89,28 @@ class HealingProxy:
                     return HealingProxy(res, "playwright_locator", adapter, store, cid)
 
                 elif driver_type == "playwright_locator" and name in (
-                    "click", "fill", "inner_text", "text_content", "check", 
+                    "click", "fill", "inner_text", "text_content", "check",
                     "uncheck", "select_option", "press", "focus", "hover", "type"
                 ):
                     cid = caller_id
                     orig_selector = cid.split(":")[-1] if cid else ""
-                    
+                    page = obj.page
                     try:
                         res = attr(*args, **kwargs)
-                        # Success. Save/Update anchor features
-                        page = obj.page
+                        # Action succeeded: update confidence from the resolved element (may raise on a decoy).
                         loc_first = obj.first
                         if loc_first.count() > 0:
-                            wrapped_el = PlaywrightElement(loc_first)
-                            features = adapter.extract_features(wrapped_el)
-                            anchor = store.get_anchor(cid)
-                            
-                            if anchor is None:
-                                anchor = Anchor(
-                                    caller_id=cid,
-                                    primary_selector=orig_selector,
-                                    confidence=1.0,
-                                    **features
-                                )
-                                store.save_anchor(anchor)
-                                store.log_confidence(cid, 1.0)
-                            else:
-                                score, _, _ = score_candidate(features, anchor)
-                                new_conf = calculate_success_confidence(anchor.confidence, score)
-                                store.log_confidence(cid, new_conf)
-                                if score < HEAL_THRESHOLD:
-                                    # Soft decoy check: only heal if there is a significantly better candidate on the page
-                                    tag = anchor.tag or "*"
-                                    candidates = page.locator(tag).all()
-                                    if not candidates:
-                                        candidates = page.locator("*").all()
-                                    features_list = adapter.extract_features_bulk(page, candidates)
-                                    best_cand_score = -1.0
-                                    for f in features_list:
-                                        if not f:
-                                            continue
-                                        dist = 0.0
-                                        if anchor.rel_position and f.get("rel_position"):
-                                            dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                                            dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                                            dist = math.sqrt(dx*dx + dy*dy)
-                                            if dist > 0.40:
-                                                continue
-                                        cand_score, _, _ = score_candidate(f, anchor)
-                                        if cand_score > best_cand_score:
-                                            best_cand_score = cand_score
-                                    if best_cand_score > score + 0.15 and best_cand_score >= HEAL_THRESHOLD:
-                                        raise Exception(f"Decoy element detected (score {score:.2f} < threshold {HEAL_THRESHOLD} and better candidate score {best_cand_score:.2f} exists)")
+                            features = adapter.extract_features(PlaywrightElement(loc_first))
+                            update_confidence_on_success(store, adapter, page, cid, orig_selector, features)
                         return res
                     except Exception as exc:
                         anchor = store.get_anchor(cid)
                         if anchor:
-                            page = obj.page
-                            # Prune candidates: query by anchor.tag first
-                            tag = anchor.tag or "*"
-                            candidates = page.locator(tag).all()
-                            if not candidates:
-                                candidates = page.locator("*").all()
-                                
-                            # Batch extract features
-                            features_list = adapter.extract_features_bulk(page, candidates)
-                            
-                            best_cand = None
-                            best_score = -1.0
-                            best_signal = "dom"
-                            best_features = {}
-                            
-                            pruned_candidates = []
-                            for i, f in enumerate(features_list):
-                                if not f:
-                                    continue
-                                dist = 0.0
-                                if anchor.rel_position and f.get("rel_position"):
-                                    dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                                    dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                                    dist = math.sqrt(dx*dx + dy*dy)
-                                    if dist > 0.40:
-                                        continue
-                                pruned_candidates.append((candidates[i], f, dist))
-                            
-                            # Sort by distance and cap at nearest 300
-                            pruned_candidates.sort(key=lambda x: x[2])
-                            pruned_candidates = [(cand, f) for cand, f, d in pruned_candidates[:300]]
-                                    
-                            for cand_el, f in pruned_candidates:
-                                score, signal, _ = score_candidate(f, anchor)
-                                if score > best_score:
-                                    best_score = score
-                                    best_cand = cand_el
-                                    best_signal = signal
-                                    best_features = f
-                                    
-                            if best_score >= HEAL_THRESHOLD and best_cand:
-                                before_conf = anchor.confidence
-                                after_conf = calculate_success_confidence(before_conf, best_score)
-                                
-                                healed_anchor = Anchor(
-                                    caller_id=cid,
-                                    primary_selector=orig_selector,
-                                    confidence=after_conf,
-                                    **best_features
-                                )
-                                store.save_anchor(healed_anchor)
-                                
-                                event = HealEvent(
-                                    caller_id=cid,
-                                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
-                                    old_selector=orig_selector,
-                                    new_selector=best_features.get("xpath") or orig_selector,
-                                    healed_features=best_features,
-                                    confidence_before=before_conf,
-                                    confidence_after=after_conf,
-                                    primary_winning_signal=best_signal
-                                )
-                                store.log_heal_event(event)
-                                store.log_confidence(cid, after_conf)
-                                
-                                # Call the action on the healed locator directly
-                                action_method = getattr(best_cand, name)
-                                return action_method(*args, **kwargs)
-                            else:
-                                store.log_confidence(cid, calculate_failure_confidence(anchor.confidence))
+                            healed = attempt_heal(store, adapter, page, cid, orig_selector, anchor)
+                            if healed:
+                                best_cand, _ = healed
+                                # Re-issue the action against the healed locator directly.
+                                return getattr(best_cand, name)(*args, **kwargs)
                         raise exc
 
                 # 3. BS4 interception
@@ -320,127 +119,25 @@ class HealingProxy:
                     if not selector:
                         selector = args[0] if len(args) > 0 else ""
                     cid = get_caller_id(selector)
-                    
                     try:
                         res = attr(*args, **kwargs)
                         if res is None:
                             raise Exception("Element not found")
-                        # Successfully found!
-                        anchor = store.get_anchor(cid)
                         features = adapter.extract_features(res)
-                        
-                        if anchor is None:
-                            # First time: save baseline anchor
-                            anchor = Anchor(
-                                caller_id=cid,
-                                primary_selector=selector,
-                                confidence=1.0,
-                                **features
-                            )
-                            store.save_anchor(anchor)
-                            store.log_confidence(cid, 1.0)
-                        else:
-                            # Subsequent success: score against baseline and log continuous confidence
-                            score, _, _ = score_candidate(features, anchor)
-                            new_conf = calculate_success_confidence(anchor.confidence, score)
-                            store.log_confidence(cid, new_conf)
-                            if score < HEAL_THRESHOLD:
-                                # Soft decoy check: only heal if there is a significantly better candidate on the page
-                                tag = anchor.tag or "*"
-                                candidates = adapter.query_candidates(obj, tag)
-                                if not candidates:
-                                    candidates = adapter.query_candidates(obj, "*")
-                                features_list = adapter.extract_features_bulk(obj, candidates)
-                                best_cand_score = -1.0
-                                for f in features_list:
-                                    if not f:
-                                        continue
-                                    dist = 0.0
-                                    # BS4 has no coordinates/positions, so dist is always 0.0
-                                    cand_score, _, _ = score_candidate(f, anchor)
-                                    if cand_score > best_cand_score:
-                                        best_cand_score = cand_score
-                                if best_cand_score > score + 0.15 and best_cand_score >= HEAL_THRESHOLD:
-                                    raise Exception(f"Decoy element detected (score {score:.2f} < threshold {HEAL_THRESHOLD} and better candidate score {best_cand_score:.2f} exists)")
-                        
-                        # Return wrapped element proxy
+                        update_confidence_on_success(store, adapter, obj, cid, selector, features)
                         return HealingProxy(res._tag if hasattr(res, "_tag") and res._tag is not None else res, "bs4_element", adapter, store, cid)
                     except Exception as exc:
-                        # Find element failed. Trigger healing!
                         anchor = store.get_anchor(cid)
                         if anchor:
-                            # Prune candidates: query by anchor.tag first
-                            tag = anchor.tag or "*"
-                            candidates = adapter.query_candidates(obj, tag)
-                            if not candidates:
-                                candidates = adapter.query_candidates(obj, "*")
-                                
-                            # Batch extract features
-                            features_list = adapter.extract_features_bulk(obj, candidates)
-                            
-                            best_cand = None
-                            best_score = -1.0
-                            best_signal = "dom"
-                            best_features = {}
-                            
-                            pruned_candidates = []
-                            for i, f in enumerate(features_list):
-                                if not f:
-                                    continue
-                                dist = 0.0
-                                pruned_candidates.append((candidates[i], f, dist))
-                            
-                            # Sort by distance (all 0.0 for BS4, but keeps DOM structure) and cap at nearest 300
-                            pruned_candidates.sort(key=lambda x: x[2])
-                            pruned_candidates = [(cand, f) for cand, f, d in pruned_candidates[:300]]
-                                    
-                            for cand_el, f in pruned_candidates:
-                                score, signal, _ = score_candidate(f, anchor)
-                                if score > best_score:
-                                    best_score = score
-                                    best_cand = cand_el
-                                    best_signal = signal
-                                    best_features = f
-                                    
-                            if best_score >= HEAL_THRESHOLD and best_cand:
-                                # Heal successful! Refresh baseline golden snapshot
-                                before_conf = anchor.confidence
-                                after_conf = calculate_success_confidence(before_conf, best_score)
-                                
-                                healed_anchor = Anchor(
-                                    caller_id=cid,
-                                    primary_selector=selector,
-                                    confidence=after_conf,
-                                    **best_features
-                                )
-                                store.save_anchor(healed_anchor)
-                                
-                                # Log healing event
-                                event = HealEvent(
-                                    caller_id=cid,
-                                    timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
-                                    old_selector=selector,
-                                    new_selector=best_features.get("xpath") or selector,
-                                    healed_features=best_features,
-                                    confidence_before=before_conf,
-                                    confidence_after=after_conf,
-                                    primary_winning_signal=best_signal
-                                )
-                                store.log_heal_event(event)
-                                store.log_confidence(cid, after_conf)
-                                
-                                # Return the winning candidate directly
-                                return HealingProxy(best_cand._tag if hasattr(best_cand, "_tag") and best_cand._tag is not None else best_cand, "bs4_element", adapter, store, cid)
-                            else:
-                                # Decrease confidence score on failure
-                                store.log_confidence(cid, calculate_failure_confidence(anchor.confidence))
+                            healed = attempt_heal(store, adapter, obj, cid, selector, anchor)
+                            if healed:
+                                best_cand, _ = healed
+                                tag = best_cand._tag if hasattr(best_cand, "_tag") and best_cand._tag is not None else best_cand
+                                return HealingProxy(tag, "bs4_element", adapter, store, cid)
                         raise exc
 
                 # Normal forwarding for other functions
-                res = attr(*args, **kwargs)
-                if isinstance(res, (HealingProxy,)):
-                    return res
-                return res
+                return attr(*args, **kwargs)
             return wrapper
         return attr
 
@@ -454,15 +151,7 @@ def heal(driver_type: str, db_path: str = "anchorheal.db") -> Callable:
     Decorator for scraper entry points. Wraps driver/page objects with a HealingProxy.
     """
     store = AnchorStore(db_path=db_path)
-    
-    if driver_type == "selenium":
-        adapter = SeleniumAdapter()
-    elif driver_type == "playwright":
-        adapter = PlaywrightAdapter()
-    elif driver_type == "bs4":
-        adapter = BS4Adapter()
-    else:
-        raise ValueError(f"Unknown driver_type: {driver_type}")
+    adapter = _adapter_for(driver_type)
 
     def decorator(func: Callable) -> Callable:
         def wrapper(*args, **kwargs):
@@ -482,131 +171,22 @@ class HealContext:
         self.driver = driver
         self.driver_type = driver_type
         self.store = AnchorStore(db_path=db_path)
-        
-        if driver_type == "selenium":
-            self.adapter = SeleniumAdapter()
-        elif driver_type == "playwright":
-            self.adapter = PlaywrightAdapter()
-        elif driver_type == "bs4":
-            self.adapter = BS4Adapter()
+        self.adapter = _adapter_for(driver_type)
 
     def find(self, field_name: str, selector: str) -> Any:
         cid = f"tier1:{field_name}"
         try:
-            # Query element
             el = self.adapter.query(self.driver, selector)
             if el is None:
                 raise Exception(f"Element not found: {selector}")
-                
             features = self.adapter.extract_features(el)
-            anchor = self.store.get_anchor(cid)
-            
-            if anchor is None:
-                anchor = Anchor(
-                    caller_id=cid,
-                    primary_selector=selector,
-                    confidence=1.0,
-                    **features
-                )
-                self.store.save_anchor(anchor)
-                self.store.log_confidence(cid, 1.0)
-            else:
-                score, _, _ = score_candidate(features, anchor)
-                new_conf = calculate_success_confidence(anchor.confidence, score)
-                self.store.log_confidence(cid, new_conf)
-                if score < HEAL_THRESHOLD:
-                    # Soft decoy check: only heal if there is a significantly better candidate on the page
-                    tag = anchor.tag or "*"
-                    candidates = self.adapter.query_candidates(self.driver, tag)
-                    if not candidates:
-                        candidates = self.adapter.query_candidates(self.driver, "*")
-                    features_list = self.adapter.extract_features_bulk(self.driver, candidates)
-                    best_cand_score = -1.0
-                    for f in features_list:
-                        if not f:
-                            continue
-                        dist = 0.0
-                        if anchor.rel_position and f.get("rel_position"):
-                            dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                            dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                            dist = math.sqrt(dx*dx + dy*dy)
-                            if dist > 0.40:
-                                continue
-                        cand_score, _, _ = score_candidate(f, anchor)
-                        if cand_score > best_cand_score:
-                            best_cand_score = cand_score
-                    if best_cand_score > score + 0.15 and best_cand_score >= HEAL_THRESHOLD:
-                        raise Exception(f"Decoy element detected (score {score:.2f} < threshold {HEAL_THRESHOLD} and better candidate score {best_cand_score:.2f} exists)")
-                
+            update_confidence_on_success(self.store, self.adapter, self.driver, cid, selector, features)
             return el._el if hasattr(el, "_el") else el
         except Exception as exc:
             anchor = self.store.get_anchor(cid)
             if anchor:
-                # Prune candidates
-                tag = anchor.tag or "*"
-                candidates = self.adapter.query_candidates(self.driver, tag)
-                if not candidates:
-                    candidates = self.adapter.query_candidates(self.driver, "*")
-                    
-                # Batch extract features
-                features_list = self.adapter.extract_features_bulk(self.driver, candidates)
-                
-                best_cand = None
-                best_score = -1.0
-                best_signal = "dom"
-                best_features = {}
-                
-                pruned_candidates = []
-                for i, f in enumerate(features_list):
-                    if not f:
-                        continue
-                    dist = 0.0
-                    if anchor.rel_position and f.get("rel_position"):
-                        dx = anchor.rel_position["x_pct"] - f["rel_position"]["x_pct"]
-                        dy = anchor.rel_position["y_pct"] - f["rel_position"]["y_pct"]
-                        dist = math.sqrt(dx*dx + dy*dy)
-                        if dist > 0.40:
-                            continue
-                    pruned_candidates.append((candidates[i], f, dist))
-                
-                # Sort by distance and cap at nearest 300
-                pruned_candidates.sort(key=lambda x: x[2])
-                pruned_candidates = [(cand, f) for cand, f, d in pruned_candidates[:300]]
-                        
-                for cand_el, f in pruned_candidates:
-                    score, signal, _ = score_candidate(f, anchor)
-                    if score > best_score:
-                        best_score = score
-                        best_cand = cand_el
-                        best_signal = signal
-                        best_features = f
-                        
-                if best_score >= HEAL_THRESHOLD and best_cand:
-                    before_conf = anchor.confidence
-                    after_conf = calculate_success_confidence(before_conf, best_score)
-                    
-                    healed_anchor = Anchor(
-                        caller_id=cid,
-                        primary_selector=selector,
-                        confidence=after_conf,
-                        **best_features
-                    )
-                    self.store.save_anchor(healed_anchor)
-                    
-                    event = HealEvent(
-                        caller_id=cid,
-                        timestamp=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
-                        old_selector=selector,
-                        new_selector=best_features.get("xpath") or selector,
-                        healed_features=best_features,
-                        confidence_before=before_conf,
-                        confidence_after=after_conf,
-                        primary_winning_signal=best_signal
-                    )
-                    self.store.log_heal_event(event)
-                    self.store.log_confidence(cid, after_conf)
-                    
+                healed = attempt_heal(self.store, self.adapter, self.driver, cid, selector, anchor)
+                if healed:
+                    best_cand, _ = healed
                     return best_cand._el if hasattr(best_cand, "_el") else best_cand
-                else:
-                    self.store.log_confidence(cid, calculate_failure_confidence(anchor.confidence))
             raise exc

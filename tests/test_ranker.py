@@ -7,8 +7,7 @@ from anchorheal.ranker import (
     context_similarity,
     score_candidate,
     calculate_success_confidence,
-    calculate_failure_confidence,
-    calculate_decay_confidence
+    calculate_failure_confidence
 )
 from benchmark.benchmark import compute_ablation_attribution
 
@@ -132,9 +131,6 @@ def test_confidence_math():
     assert calculate_failure_confidence(0.8) == pytest.approx(0.8 * 0.85 - 0.05)
     assert calculate_failure_confidence(0.0) == pytest.approx(0.0)
 
-    # Decay
-    assert calculate_decay_confidence(0.8, 5) == pytest.approx(0.8)
-    assert calculate_decay_confidence(0.8, 8) == pytest.approx(0.8 * 0.99)
 
 def test_ablation_attribution_class_rename():
     # Setup scenario where class rename happens. Without visual, the pick would break.

@@ -133,10 +133,3 @@ def calculate_success_confidence(current_confidence: float, score: float) -> flo
 def calculate_failure_confidence(current_confidence: float) -> float:
     # failure: score = max(0.0, score * 0.85 - 0.05)
     return max(0.0, current_confidence * 0.85 - 0.05)
-
-def calculate_decay_confidence(current_confidence: float, days_unused: int) -> float:
-    # decay:   unused > 7d → score *= 0.99 per day
-    if days_unused > 7:
-        decay_days = days_unused - 7
-        return current_confidence * (0.99 ** decay_days)
-    return current_confidence

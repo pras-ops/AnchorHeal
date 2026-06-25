@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Optional, Tuple, Any
 import datetime
@@ -12,7 +13,7 @@ class Anchor(BaseModel):
     def map_text_to_pattern(cls, data: Any) -> Any:
         if isinstance(data, dict):
             if "text" in data and not data.get("text_pattern"):
-                data["text_pattern"] = data["text"]
+                data["text_pattern"] = re.escape(data["text"])
         return data
 
     # DOM features

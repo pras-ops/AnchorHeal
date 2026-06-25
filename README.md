@@ -1,8 +1,27 @@
 # AnchorHeal
 
-A drop-in, decorator-first self-healing layer for any Python scraper.
+[![CI](https://github.com/pras-ops/AnchorHeal/actions/workflows/ci.yml/badge.svg)](https://github.com/pras-ops/AnchorHeal/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-AnchorHeal provides lightweight, fast, local element recovery and early-warning drift prediction. It is designed for **deterministic, high-volume, and cost/latency-sensitive scraping** where calling an LLM API (like Firecrawl, ScrapeGraphAI, or AgentQL) for every page is too slow or expensive. It uses a hybrid ranking model blending DOM features, text patterns, parent/sibling context, and visual/coordinate signals to dynamically locate moved elements when selector paths break.
+> **Status: experimental (v0.1).** Validated against a local synthetic test playground; real-site
+> validation is still pending — see [Validation status](#validation-status) before relying on it in
+> production.
+
+**A drop-in, decorator-first drift early-warning and self-healing layer for any Python scraper.**
+
+AnchorHeal's headline job is **observability**: it tracks a per-selector confidence curve so you can
+see *which scrapers are about to break* before they actually do (`ObservabilityManager.predict_failures()`).
+The **self-healing** is the floor underneath that — when a selector path finally breaks, AnchorHeal
+relocates the moved element locally instead of crashing your run.
+
+It is designed for **deterministic, high-volume, and cost/latency-sensitive scraping** where calling
+an LLM API (like Firecrawl, ScrapeGraphAI, or AgentQL) for every page is too slow or expensive, and
+where you want drift early-warning that pure selector-relocation libraries don't surface. Recovery
+uses a hybrid ranking model blending DOM features, text patterns, parent/sibling context, and
+visual/coordinate signals to locate moved elements when selector paths break.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and [LICENSE](LICENSE) (MIT).
 
 ---
 
@@ -109,9 +128,34 @@ Evaluates signal decisiveness by removing one weight category at a time (ablatio
 ```bash
 python3 benchmark/benchmark.py
 ```
+On the 8 synthetic scenarios this reports **75.0% DOM-only → 87.5% full ranker (+12.5% net)**. The
+lift comes from the signal *blend* (text/context/visual together), not from a standalone visual
+signal — the ablation attribution shows visual is rarely the single decisive signal on its own.
 
 ### Run live browser benchmark:
-Drives a headless browser through the Flask test playground and compares DOM-only matching against the Full hybrid ranker (recovering 100% of scenarios with visual-signal lift).
+Drives a headless browser through the Flask test playground and compares DOM-only matching against
+the full hybrid ranker on real rendered drift, printing per-scenario recovery plus ablation
+attribution. (This path requires a local browser and has not been run as part of the published
+results — see [Validation status](#validation-status).)
 ```bash
 python3 benchmark/benchmark.py --live
 ```
+
+---
+
+## Validation status
+
+Be aware of exactly what has and hasn't been verified before depending on AnchorHeal:
+
+- **Synthetic only.** The headline numbers come from the 8-scenario synthetic ablation benchmark and
+  the local Flask test playground. There is **no real-world site benchmark** yet.
+- **Not every drift is recoverable.** The full ranker does **not** recover the "Drastic DOM churn"
+  scenario (tags, classes, and tree all change at once, leaving only text + approximate position) —
+  the "renamed-class-same-position" recovery story holds for mild-to-moderate drift, not arbitrary
+  restructuring.
+- **No standalone visual lift is claimed.** Visual/coordinate signals help disambiguate as part of
+  the blend; they are not independently decisive in most scenarios (see the ablation output).
+- **Concurrency.** The SQLite store uses WAL journaling so multiple scrapers can share a database
+  file, but heavy concurrent throughput has not been load-tested.
+
+Running a real-site benchmark is the main open item before a production-readiness claim.

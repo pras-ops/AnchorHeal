@@ -1,5 +1,9 @@
 # AnchorHeal — Fix Plan (v3)
 
+> [!NOTE]
+> **COMPLETED & ARCHIVED**
+> This fix plan has been fully implemented. For details of subsequent bug fixes and changes, see the [CHANGELOG.md](file:///Users/mouseback/Desktop/test1/AnchorHeal/CHANGELOG.md). For genuine remaining/future work, see the [ROADMAP.md](file:///Users/mouseback/Desktop/test1/AnchorHeal/ROADMAP.md).
+
 *Turns the working week-4 prototype into something defensible and testable. Closes the four gaps
 found in the evaluation, and adds a local **test website** so every fix can be run and seen, not
 just asserted.*
@@ -272,5 +276,3 @@ honest ablation (not the fake "winning signal"); a heal on the test site complet
 ## 11. File manifest
 **New:** `testsite/` (app + 3 templates + css + README), `examples/{demo_bs4,demo_selenium,demo_playwright,demo_drift}.py`, `tests/test_continuous_confidence.py`, this `FIX_PLAN.md`.
 **Edited:** `anchorheal/decorator.py`, `anchorheal/ranker.py`, `anchorheal/adapters/{base,selenium,playwright,bs4}.py`, `benchmark/benchmark.py`, `tests/{test_interception,test_ranker}.py`, `README.md`, `pyproject.toml`.
-</content>
-</invoke>

@@ -8,12 +8,6 @@ except ImportError:
     class By:
         CSS_SELECTOR = "css selector"
 
-try:
-    from PIL import Image
-    import io
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
 
 class SeleniumElement:
     def __init__(self, el: Any):
@@ -34,7 +28,11 @@ class SeleniumElement:
 
     @property
     def text(self) -> str:
-        return self._el.text
+        try:
+            driver = self._el.parent
+            return (driver.execute_script("return arguments[0].textContent", self._el) or "").strip()
+        except Exception:
+            return self._el.text
 
     @property
     def xpath(self) -> str:
@@ -315,31 +313,4 @@ class SeleniumAdapter:
             "sibling_text": sibling_text
         }
 
-    def get_crop(self, ctx: Any, bbox: Dict[str, float]) -> Optional[bytes]:
-        # ctx is driver
-        if not HAS_PIL:
-            return None
-        try:
-            # Get full page screenshot
-            png_bytes = ctx.get_screenshot_as_png()
-            img = Image.open(io.BytesIO(png_bytes))
-            
-            # Crop elements
-            center_x = bbox["x"] + bbox["w"] / 2
-            center_y = bbox["y"] + bbox["h"] / 2
-            
-            crops = {}
-            for size in (32, 64):
-                left = max(0, center_x - size / 2)
-                top = max(0, center_y - size / 2)
-                right = min(img.width, center_x + size / 2)
-                bottom = min(img.height, center_y + size / 2)
-                
-                cropped = img.crop((left, top, right, bottom))
-                out = io.BytesIO()
-                cropped.save(out, format="PNG")
-                crops[size] = out.getvalue()
-                
-            return crops
-        except Exception:
-            return None
+
