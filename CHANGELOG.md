@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dead `get_crop` protocol slot and its adapter-level implementations from all elements and drivers.
 - Unused PIL imports from `selenium.py` and `playwright.py`.
 
+### Fixed
+- `get_caller_id` no longer skips user code whose path merely contains `anchorheal`, `pytest` or
+  `conftest` (for example `~/anchorheal-scrapers/shop.py`). Such frames were skipped, so anchors
+  were keyed to the wrong file. Frames are now skipped only when they belong to the package
+  itself or to the test runner. Regression tests in `tests/test_caller_id.py`.
+- CI: the `dev` extra now installs `requests`, which the tests need through the benchmark
+  helpers.
+- Broken `file:///Users/...` links in `FIX_PLAN.md` and `ROADMAP.md` are now relative links;
+  `scratch/` is renamed to `experiments/`.
+
 ## [0.1.0] - 2026-06-22
 
 Initial public release.
