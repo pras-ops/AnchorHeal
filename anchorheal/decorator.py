@@ -15,14 +15,29 @@ from ._healing import (
 __all__ = ["heal", "HealContext", "HealingProxy", "HEAL_THRESHOLD"]
 
 
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep
+_TEST_RUNNER_MODULES = {"_pytest", "pytest", "pluggy"}
+
+
+def _is_internal_frame(frame) -> bool:
+    """True for frames in this package or the test runner. Matching on the package's own
+    directory (not on "anchorheal" anywhere in the path) keeps user code that merely lives
+    in a folder with that name from being skipped."""
+    filename = os.path.abspath(frame.f_code.co_filename)
+    module = frame.f_globals.get("__name__", "").split(".")[0]
+    return (
+        filename.startswith(_PACKAGE_DIR)
+        or module in _TEST_RUNNER_MODULES
+        or os.path.basename(filename) == "conftest.py"
+    )
+
+
 def get_caller_id(selector: str) -> str:
     frame = inspect.currentframe()
     try:
         while frame:
-            filename = frame.f_code.co_filename
-            # Skip frames inside anchorheal library or testing framework internals
-            if "anchorheal" not in filename and "conftest" not in filename and "pytest" not in filename:
-                base_name = os.path.basename(filename)
+            if not _is_internal_frame(frame):
+                base_name = os.path.basename(frame.f_code.co_filename)
                 # Drop the line number to prevent orphaning saved anchors when the scraper code is edited
                 return f"{base_name}:{selector}"
             frame = frame.f_back

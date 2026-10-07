@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **COMPLETED & ARCHIVED**
-> This fix plan has been fully implemented. For details of subsequent bug fixes and changes, see the [CHANGELOG.md](file:///Users/mouseback/Desktop/test1/AnchorHeal/CHANGELOG.md). For genuine remaining/future work, see the [ROADMAP.md](file:///Users/mouseback/Desktop/test1/AnchorHeal/ROADMAP.md).
+> This fix plan has been fully implemented. For details of subsequent bug fixes and changes, see the [CHANGELOG.md](CHANGELOG.md). For genuine remaining/future work, see the [ROADMAP.md](ROADMAP.md).
 
 *Turns the working week-4 prototype into something defensible and testable. Closes the four gaps
 found in the evaluation, and adds a local **test website** so every fix can be run and seen, not

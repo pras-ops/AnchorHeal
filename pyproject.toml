@@ -49,6 +49,7 @@ Changelog = "https://github.com/pras-ops/AnchorHeal/blob/main/CHANGELOG.md"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "requests>=2.31",  # tests import the benchmark helpers, which use requests
 ]
 testsite = [
     "flask>=3.0",
@@ -62,7 +63,7 @@ browsers = [
 
 [tool.setuptools.packages.find]
 include = ["anchorheal*"]
-exclude = ["scratch*", "tests*", "benchmark*"]
+exclude = ["experiments*", "tests*", "benchmark*"]
 
 [tool.setuptools.package-data]
 anchorheal = ["py.typed"]
